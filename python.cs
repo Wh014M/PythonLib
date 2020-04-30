@@ -5,14 +5,6 @@
        | Github    : https://github.com/LimerBoy
        >
 
-       * EXAMPLE USAGE:
-       
-
-       if (!python.magic.isInstalled())
-           python.magic.install("3.8.0");
-
-       python.magic.installRequirements("requirements.txt");
-
 */
 
 
@@ -20,29 +12,59 @@ using System;
 using System.IO;
 using System.Net;
 using System.Diagnostics;
+using System.IO.Compression;
 
-
-namespace python
+namespace Python
 {
 
-    internal sealed class magic
+    // Output
+    internal sealed class output
+    {
+        public int ExitCode;
+        public string Stdout;
+        public string Stderr;
+    }
+
+    // Python
+    internal sealed class interpreter
     {
 
-
-        /*
-         * Download and install python to system.
-         * Versions available:
-         * 3.5.0
-         * 3.6.0
-         * 3.7.0
-         * 3.8.0
-         */
-        public static void install(string version)
+        public string version;
+        public int architecture;
+        // Constructor
+        public interpreter(string version)
         {
-            // If python is installed
-            if (isInstalled()) {
-                throw new Exception("python is already installed in the system");
+            this.version = version;
+            this.architecture = GetArchitecture();
+            this.LoadInterpreter();
+        }
+
+        // Get cpu architecture
+        private int GetArchitecture()
+        {
+            if (Microsoft.Win32.Registry.LocalMachine
+                .OpenSubKey(@"HARDWARE\Description\System\CentralProcessor\0")
+                .GetValue("Identifier")
+                .ToString()
+                .Contains("x86"))
+            {
+                return 32;
+            } else {
+                return 64;
             }
+        }
+
+        // Load & Extract portable python
+        private string LoadInterpreter()
+        {
+            // Path
+            string pythonDownloadUrl = $"https://github.com/oswjk/portablepython/releases/download/release-4/Python-{version}-{architecture}.zip";
+            string pythonInstallPath = Path.GetTempPath();
+            string pythonArchivePath = pythonInstallPath + $"\\python-{version}-{architecture}.zip";
+            string interpreter = pythonInstallPath + $"\\Python-{version}-{architecture}\\python.exe";
+            // If python installed to temp dir
+            if (File.Exists(interpreter))
+                return interpreter;
             // SSL
             ServicePointManager.SecurityProtocol = (
                 SecurityProtocolType.Ssl3  |
@@ -50,64 +72,63 @@ namespace python
                 SecurityProtocolType.Tls11 |
                 SecurityProtocolType.Tls12
             );
-            // Path
-            string pythonDownloadUrl = $"https://www.python.org/ftp/python/{version}/python-{version}.exe";
-            string pythonInstallerPath = Path.GetTempPath() + "\\python.exe";
-            string pythonInstallPath = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles) + "\\python";
             // Download python installer
             using (var client = new WebClient())
             {
+                Console.WriteLine("Downloading...");
                 try {
-                    client.DownloadFile(pythonDownloadUrl, pythonInstallerPath);
+                    client.DownloadFile(pythonDownloadUrl, pythonArchivePath);
                 } catch (WebException error) {
                     // If error 404
-                    if (error.Message.Contains("404")) {
-                        throw new FileNotFoundException("The specified version of python was not found.");
-                    // If other error
+                    if (error.Message.Contains("404"))
+                    {
+                        Console.WriteLine("The specified version of python was not found.");
+                        Environment.Exit(1);
+                        // If other error
                     } else {
-                        throw new WebException(error.Message);
+                        Console.WriteLine(error.Message);
+                        Environment.Exit(1);
                     }
                 }
             }
-            // Run python installer
-            using (var process = new Process())
-            {
-                // Process info
-                ProcessStartInfo StartInfo = new ProcessStartInfo
-                {
-                    FileName = pythonInstallerPath,
-                    Arguments = $"/quiet TargetDir={pythonInstallPath} PrependPath=1 Include_test=0 Include_pip=1 AssociateFiles=1 InstallAllUsers=0",
-                    WindowStyle = ProcessWindowStyle.Hidden,
-                    CreateNoWindow = true,
-                    UseShellExecute = false
-                };
-                // Start process
-                process.StartInfo = StartInfo;
-                process.Start();
-                process.WaitForExit();
-                // If error
-                if (process.ExitCode != 0)
-                    throw new Exception("Failed to install, exit code: " + process.ExitCode);
-            }
-            // Remove downloaded installer
-            File.Delete(pythonInstallerPath);
+            // Extract python
+            Console.WriteLine("Extracting...");
+            ZipFile.ExtractToDirectory(pythonArchivePath, pythonInstallPath);
+            // Clean
+            Console.WriteLine("Cleaning...");
+            File.Delete(pythonArchivePath);
+            // Return path
+            return interpreter;
         }
 
+        // Delete interpreter
+        public void DeleteInterpreter()
+        {
+            Console.WriteLine("Deleting interpreter...");
+            string interpreter = LoadInterpreter();
+            string pythonDir = Path.GetDirectoryName(interpreter);
+            Directory.Delete(pythonDir, recursive: true);
+            Console.WriteLine("Interpreter removed");
+        }
+
+
         // Install requirements from file.
-        public static void installRequirements(string file)
+        public void InstallRequirements(string file)
         {
             // If requirements file not exists
             if(!File.Exists(file)) {
-                throw new FileNotFoundException($"requirements file {file} not found!");
+                Console.WriteLine($"Requirements file {file} not found!");
+                return;
             }
 
             // Run pip install command
+            Console.WriteLine("Installing requirements...");
             using (var process = new Process())
             {
                 // Process info
                 ProcessStartInfo StartInfo = new ProcessStartInfo
                 {
-                    FileName = "python.exe",
+                    FileName = this.LoadInterpreter(),
                     Arguments = $"-m pip install -r {file}",
                     WindowStyle = ProcessWindowStyle.Hidden,
                     CreateNoWindow = true,
@@ -119,23 +140,31 @@ namespace python
                 process.WaitForExit();
                 // If error
                 if (process.ExitCode != 0)
-                    throw new Exception("Failed to install requirements, exit code: " + process.ExitCode);
+                    Console.WriteLine($"Failed to install requirements, exit code: {process.ExitCode}");
             }
         }
-    
-    
 
-        // Check if python is installed.
-        public static bool isInstalled()
+        // Run python script
+        public output Run(string script, string args = "")
         {
-            // Run python --help command
+            // If script not exists
+            if (!File.Exists(script))
+            {
+                Console.WriteLine($"Script {script} not found!");
+                return null;
+            }
+
+            // Run script
+            Console.WriteLine($"Running script {script}...");
             using (var process = new Process())
             {
                 // Process info
                 ProcessStartInfo StartInfo = new ProcessStartInfo
                 {
-                    FileName = "cmd.exe",
-                    Arguments = "/c python.exe --version",
+                    FileName = this.LoadInterpreter(),
+                    Arguments = $"{script} {args}",
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true,
                     WindowStyle = ProcessWindowStyle.Hidden,
                     CreateNoWindow = true,
                     UseShellExecute = false
@@ -144,12 +173,19 @@ namespace python
                 process.StartInfo = StartInfo;
                 process.Start();
                 process.WaitForExit();
-                // Return values
-                if (process.ExitCode == 0)
-                    return true;
-                else
-                    return false;
+                // Read
+                var output = new output();
+                output.Stdout = process.StandardOutput.ReadToEnd();
+                output.Stderr = process.StandardError.ReadToEnd();
+                output.ExitCode = process.ExitCode;
+                Console.WriteLine($"Script {script} stopped working.");
+                // Return output
+                return output;
             }
         }
+    
+    
+
+
     }
 }
