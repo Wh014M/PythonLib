@@ -2,7 +2,7 @@
        >
        | Author    : LimerBoy
        | Name      : AutoPyMagic
-       | Github    : https:github.com/LimerBoy
+       | Github    : https://github.com/LimerBoy
        >
 
        * EXAMPLE USAGE:
@@ -65,7 +65,7 @@ namespace python
                         throw new FileNotFoundException("The specified version of python was not found.");
                     // If other error
                     } else {
-                        throw new WebException("Bad internet connection. Try again.");
+                        throw new WebException(error.Message);
                     }
                 }
             }
