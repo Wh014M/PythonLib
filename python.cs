@@ -6,7 +6,8 @@
        >
 
        * EXAMPLE USAGE:
-       * 
+       
+
        if (!python.magic.isInstalled())
            python.magic.install("3.8.0");
 
@@ -39,10 +40,8 @@ namespace python
         public static void install(string version)
         {
             // If python is installed
-            if (isInstalled())
-            {
-                Console.WriteLine("python is already installed in the system");
-                return;
+            if (isInstalled()) {
+                throw new Exception("python is already installed in the system");
             }
             // SSL
             ServicePointManager.SecurityProtocol = (
@@ -58,25 +57,21 @@ namespace python
             // Download python installer
             using (var client = new WebClient())
             {
-                Console.WriteLine($"Downloading python {version}...");
                 try {
                     client.DownloadFile(pythonDownloadUrl, pythonInstallerPath);
                 } catch (WebException error) {
                     // If error 404
                     if (error.Message.Contains("404")) {
-                        Console.WriteLine("The specified version of python was not found.");
-                        return;
+                        throw new FileNotFoundException("The specified version of python was not found.");
                     // If other error
                     } else {
-                        Console.WriteLine("Bad internet connection. Try again.");
-                        return;
+                        throw new WebException("Bad internet connection. Try again.");
                     }
                 }
             }
             // Run python installer
             using (var process = new Process())
             {
-                Console.WriteLine("Installing...");
                 // Process info
                 ProcessStartInfo StartInfo = new ProcessStartInfo
                 {
@@ -90,21 +85,22 @@ namespace python
                 process.StartInfo = StartInfo;
                 process.Start();
                 process.WaitForExit();
-                // Show info
-                if (process.ExitCode == 0)
-                    Console.WriteLine($"Python-{version} is installed.");
-                else
-                    Console.WriteLine("Failed to install, exit code: " + process.ExitCode);
-
+                // If error
+                if (process.ExitCode != 0)
+                    throw new Exception("Failed to install, exit code: " + process.ExitCode);
             }
             // Remove downloaded installer
-            Console.WriteLine("Cleaning...");
             File.Delete(pythonInstallerPath);
         }
 
         // Install requirements from file.
         public static void installRequirements(string file)
         {
+            // If requirements file not exists
+            if(!File.Exists(file)) {
+                throw new FileNotFoundException($"requirements file {file} not found!");
+            }
+
             // Run pip install command
             using (var process = new Process())
             {
@@ -121,11 +117,9 @@ namespace python
                 process.StartInfo = StartInfo;
                 process.Start();
                 process.WaitForExit();
-                // Return values
-                if (process.ExitCode == 0)
-                    Console.WriteLine($"All dependencies are installed from the {file} file.");
-                else
-                    Console.WriteLine("Failed to install requirements, exit code: " + process.ExitCode);
+                // If error
+                if (process.ExitCode != 0)
+                    throw new Exception("Failed to install requirements, exit code: " + process.ExitCode);
             }
         }
     
@@ -157,10 +151,5 @@ namespace python
                     return false;
             }
         }
-
-        
-
-
-
     }
 }
