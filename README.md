@@ -1,6 +1,12 @@
-# AutoPyMagic
-:star: Automatic python and dependency installer on computer. For C#
+# :sparkles: PythonLib
+Automatic python and dependency installer on computer. For C#
 
+# :fire: Example:
+<p align="center">
+  <img src="example.gif"/>
+</p>
+
+# :zap: Usage:
 ``` C#
 using System;
 
