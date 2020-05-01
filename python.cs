@@ -47,11 +47,10 @@ namespace Python
                 .GetValue("Identifier")
                 .ToString()
                 .Contains("x86"))
-            {
+            
                 return 32;
-            } else {
+            else
                 return 64;
-            }
         }
 
         // Load & Extract portable python
@@ -62,7 +61,7 @@ namespace Python
             string pythonInstallPath = Path.GetTempPath();
             string pythonArchivePath = pythonInstallPath + $"\\python-{version}-{architecture}.zip";
             string interpreter = pythonInstallPath + $"\\Python-{version}-{architecture}\\python.exe";
-            // If python installed to temp dir
+            // If python already installed to temp dir
             if (File.Exists(interpreter))
                 return interpreter;
             // SSL
@@ -75,27 +74,21 @@ namespace Python
             // Download python installer
             using (var client = new WebClient())
             {
-                Console.WriteLine("Downloading...");
                 try {
                     client.DownloadFile(pythonDownloadUrl, pythonArchivePath);
                 } catch (WebException error) {
                     // If error 404
                     if (error.Message.Contains("404"))
-                    {
-                        Console.WriteLine("The specified version of python was not found.");
-                        Environment.Exit(1);
-                        // If other error
-                    } else {
-                        Console.WriteLine(error.Message);
-                        Environment.Exit(1);
-                    }
+                        throw new FileNotFoundException("The specified version of python was not found.");
+                    // If other error
+                    else
+                        throw new WebException(error.Message);
+                    
                 }
             }
             // Extract python
-            Console.WriteLine("Extracting...");
             ZipFile.ExtractToDirectory(pythonArchivePath, pythonInstallPath);
             // Clean
-            Console.WriteLine("Cleaning...");
             File.Delete(pythonArchivePath);
             // Return path
             return interpreter;
@@ -104,11 +97,9 @@ namespace Python
         // Delete interpreter
         public void DeleteInterpreter()
         {
-            Console.WriteLine("Deleting interpreter...");
             string interpreter = LoadInterpreter();
             string pythonDir = Path.GetDirectoryName(interpreter);
             Directory.Delete(pythonDir, recursive: true);
-            Console.WriteLine("Interpreter removed");
         }
 
 
@@ -116,13 +107,11 @@ namespace Python
         public void InstallRequirements(string file)
         {
             // If requirements file not exists
-            if(!File.Exists(file)) {
-                Console.WriteLine($"Requirements file {file} not found!");
-                return;
-            }
-
+            if(!File.Exists(file))
+                throw new FileNotFoundException($"Requirements file {file} not found!");
+            
+            
             // Run pip install command
-            Console.WriteLine("Installing requirements...");
             using (var process = new Process())
             {
                 // Process info
@@ -140,7 +129,7 @@ namespace Python
                 process.WaitForExit();
                 // If error
                 if (process.ExitCode != 0)
-                    Console.WriteLine($"Failed to install requirements, exit code: {process.ExitCode}");
+                    throw new Exception($"Failed to install requirements, exit code: {process.ExitCode}");
             }
         }
 
@@ -149,19 +138,17 @@ namespace Python
         {
             // If script not exists
             if (!File.Exists(script))
-            {
-                Console.WriteLine($"Script {script} not found!");
-                return null;
-            }
+                throw new FileNotFoundException($"Script {script} not found!");
+            
 
             // Run script
-            Console.WriteLine($"Running script {script}...");
             using (var process = new Process())
             {
                 // Process info
                 ProcessStartInfo StartInfo = new ProcessStartInfo
                 {
                     FileName = this.LoadInterpreter(),
+                    WorkingDirectory = Path.GetDirectoryName(script),
                     Arguments = $"{script} {args}",
                     RedirectStandardError = true,
                     RedirectStandardOutput = true,
@@ -178,7 +165,6 @@ namespace Python
                 output.Stdout = process.StandardOutput.ReadToEnd();
                 output.Stderr = process.StandardError.ReadToEnd();
                 output.ExitCode = process.ExitCode;
-                Console.WriteLine($"Script {script} stopped working.");
                 // Return output
                 return output;
             }
